@@ -1,0 +1,5 @@
+
+»
+java:S6548"˜A Singleton implementation was detected. Make sure the use of the Singleton pattern is required and the implementation is the right one for the context.(½€‘€ûÿÿÿÿ8˜’ß×è1
+l
+java:S1858""J"payload" is already a string, there's no need to call "toString()" on it.(â’¶¿ùÿÿÿÿ8¦’ß×è1

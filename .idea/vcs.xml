@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="VcsDirectoryMappings">
+    <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/deployments" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/notifier-service" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/stream-service" vcs="Git" />
+  </component>
+</project>

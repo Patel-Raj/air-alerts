@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: <PLACEHOLDER>
+    username: root
+    password: <PLACEHOLDER>
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+
+jwt:
+  secret-key: <PLACEHOLDER>
+  expire: 86400000
+
+aws:
+  region: us-east-1
+  sqs:
+    queueUrl: <PLACEHOLDER>
+  stream-service:
+    arn: <PLACEHOLDER>
+  lab-role:
+    arn: <PLACEHOLDER>
+
+server:
+  port: 8080
+
+frontend:
+  url: <PLACEHOLDER>
+
+cross:
+  origin:
+    allowed-origins: "*"
+
+openAQ:
+  api-key: <PLACEHOLDER>
+
+stripe:
+  api-key: <PLACEHOLDER>
+  webhook-key: <PLACEHOLDER>

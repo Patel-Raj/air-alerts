@@ -1,0 +1,37 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.payment-success-container {
+  text-align: center;
+  margin-top: 50px;
+}
+
+.payment-success-heading {
+  font-size: 24px;
+  color: rgb(0,123,250);
+}
+
+.payment-success-message {
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.home-button {
+  background-color: rgb(0,123,250);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.home-button:hover {
+  background-color: rgb(0,123,250);
+}

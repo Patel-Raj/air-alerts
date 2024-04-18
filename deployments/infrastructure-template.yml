@@ -1,0 +1,424 @@
+Resources:
+  # VPC for the web application.
+  CloudVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/20
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      Tags:
+        - Key: 'Name'
+          Value: 'CloudVPC'
+
+  # Internet gateway for the CloudVPC.
+  CloudIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: 'Name'
+          Value: 'CloudIGW'
+
+  # Attach CloudIGW to CloudVPC.
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref CloudIGW
+      VpcId: !Ref CloudVPC
+
+  # Create a public subnet in CloudVPC.
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CloudVPC
+      AvailabilityZone: 'us-east-1a'
+      MapPublicIpOnLaunch: true
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: public-subnet-us-east-1a
+
+  # Create a private subnet in CloudVPC.
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CloudVPC
+      AvailabilityZone: 'us-east-1a'
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: private-subnet-us-east-1a
+
+  # Create a public subnet in CloudVPC.
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CloudVPC
+      AvailabilityZone: 'us-east-1b'
+      MapPublicIpOnLaunch: true
+      CidrBlock: 10.0.3.0/24
+      Tags:
+        - Key: Name
+          Value: public-subnet-us-east-1b
+
+  # Create a private subnet in CloudVPC.
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CloudVPC
+      AvailabilityZone: 'us-east-1b'
+      CidrBlock: 10.0.4.0/24
+      Tags:
+        - Key: Name
+          Value: private-subnet-us-east-1b
+
+  # Create a public route table.
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: public-route-table-cloud-vpc
+      VpcId: !Ref CloudVPC
+
+  # Create a private route table.
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: private-route-table-cloud-vpc
+      VpcId: !Ref CloudVPC
+
+  # Create a route table - subnet association.
+  PublicRouteSubnetAssoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet1
+
+  # Create a route table - subnet association.
+  PublicRouteSubnetAssoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet2
+
+  # Create a route table - subnet association.
+  PrivateRouteSubnetAssoc1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet1
+
+  # Create a route table - subnet association.
+  PrivateRouteSubnetAssoc2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet2
+
+  # Create public route it internet gateway.
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref CloudIGW
+
+  ElasticIp:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  # Create NAT Gateway in public subnet.
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIp.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: CloudNatGateway
+
+  # Create route to NAT Gateway in private subnet.
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  # LoadBalancer to route public traffic to private subnet.
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Name: backend-lb
+      Scheme: internet-facing
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref BackendEC2SG
+
+  # Target Group.
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: TargetGroup
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref CloudVPC
+      TargetType: instance
+      Matcher:
+        HttpCode: '200'
+      HealthCheckPath: /rest/auth/status
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Targets:
+        - Id: !Ref BackendEC2
+          Port: 80
+
+  # Forward HTTP request.
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  # Frontend EC2 Security Group.
+  FrontEndEC2SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: frontend-ec2-sg
+      GroupDescription: 'Allow HTTP, HTTPS, and SSH traffic'
+      VpcId: !Ref CloudVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  # Frontend EC2 instance.
+  FrontEndEC2:
+    Type: AWS::EC2::Instance
+    DependsOn: LoadBalancer
+    Properties:
+      InstanceType: t2.large
+      ImageId: 'ami-0440d3b780d96b29d'
+      KeyName: 'vlab-key-pair'
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          GroupSet:
+            - !Ref FrontEndEC2SG
+          DeviceIndex: 0
+          SubnetId: !Ref PublicSubnet1
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          sudo su
+          yum update -y
+          yum install -y docker
+          yum install -y git
+          yum install -y jq
+          service docker start
+          git clone https://gitlab-ci-token:<PLACEHOLDER>@git.cs.dal.ca/patel34/air-quality-frontend.git  /app
+          cd /app
+          source credentials
+          sleep 120 && LB_DNS=$(aws elbv2 describe-load-balancers --names backend-lb | jq -r '.LoadBalancers[0].DNSName')
+          echo "$LB_DNS" > lb_dns.txt
+          echo "http://${LB_DNS}" > lb_dns_url.txt
+          docker build --build-arg REACT_APP_BACKEND_BASE_URL="http://${LB_DNS}" --platform linux/amd64 -t image .
+          docker run -d --name frontend -p 80:80 image
+      Tags:
+        - Key: Name
+          Value: 'FrontEndEC2'
+
+  # Backend instance Security Group.
+  BackendEC2SG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Allow HTTP, HTTPS, and SSH traffic'
+      VpcId: !Ref CloudVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  # Backend EC2 instance.
+  BackendEC2:
+    Type: AWS::EC2::Instance
+    DependsOn: RDSInstance
+    Properties:
+      InstanceType: t2.large
+      ImageId: 'ami-0440d3b780d96b29d'
+      KeyName: 'vlab-key-pair'
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref BackendEC2SG
+          DeviceIndex: 0
+          SubnetId: !Ref PrivateSubnet1
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum update -y
+          yum install -y docker
+          service docker start
+          docker pull patelraj22777/backend-image
+          docker run -d --name backend -p 80:8080 patelraj22777/backend-image
+      Tags:
+        - Key: Name
+          Value: 'BackendEC2'
+
+  # RDS Subnet group.
+  RDSSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: RDS Subnet Group
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: RDSSubnetGroup
+
+  # RDS Security group.
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "RDS SG"
+      VpcId: !Ref CloudVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref BackendEC2SG
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          DestinationSecurityGroupId: !Ref BackendEC2SG
+
+  # RDS Instance.
+  RDSInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      MasterUsername: "root"
+      MasterUserPassword: <PLACEHOLDER>
+      DBInstanceClass: "db.t3.micro"
+      Engine: "mysql"
+      AllocatedStorage: 20
+      MaxAllocatedStorage: 20
+      AutoMinorVersionUpgrade: false
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      DBInstanceIdentifier: database-instance
+      DBName: backenddb
+      Port: 3306
+      MultiAZ: false
+      AvailabilityZone: 'us-east-1a'
+      BackupRetentionPeriod: 0
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      StorageEncrypted: true
+
+  # SQS queue.
+  Queue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: notifier-queue.fifo
+      FifoQueue: 'true'
+      MessageRetentionPeriod: 1200
+      VisibilityTimeout: 900
+      ContentBasedDeduplication: 'true'
+      DeduplicationScope: messageGroup
+
+  # Lambda SG.
+  LambdaSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Allow HTTPS traffic'
+      VpcId: !Ref CloudVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  # Notifier Lambda.
+  NotifierServiceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: notifier-service
+      Handler: com.cloud.Handler::handleRequest
+      Role: <PLACEHOLDER>
+      Code:
+        S3Bucket: csci-5409-builds
+        S3Key: notifier-service.jar
+      Runtime: java17
+      Timeout: 900
+      Environment:
+        Variables:
+          EMAIL_USERNAME: <PLACEHOLDER>
+          EMAIL_PASSWORD: <PLACEHOLDER>
+      VpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+        SecurityGroupIds:
+          - !Ref LambdaSG
+
+  # Stream Lambda.
+  StreamServiceLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: stream-service
+      Handler: org.cloud.HandleEventBridge::handleRequest
+      Role: <PLACEHOLDER>
+      Code:
+        S3Bucket: csci-5409-builds
+        S3Key: stream-service.jar
+      Runtime: java17
+      Timeout: 60
+      Environment:
+        Variables:
+          OPENAQ_API_KEY: <PLACEHOLDER>
+          OUTGOING_QUEUE_URL: <PLACEHOLDER>
+      VpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+        SecurityGroupIds:
+          - !Ref LambdaSG
+
+  # Notifier Lambda - Queue Trigger.
+  NotifierLambdaQueueMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 1
+      EventSourceArn: !GetAtt Queue.Arn
+      FunctionName: !GetAtt NotifierServiceLambda.Arn
+
+Outputs:
+  LoadBalancerDNS:
+    Description: DNS name of the Application Load Balancer
+    Value: !GetAtt LoadBalancer.DNSName
